@@ -36,7 +36,7 @@ void ThreadCliente(SOCKET clientSocket) {
             clientes.push_back({clientSocket, depto, nome});
         }
 
-        std::cout << "\n[SISTEMA] Novo funcionario conectado: " << nome << " (Depto: " << (int)depto << ")\n> ";
+        std::cout << "\n[CENTRAL] Novo funcionario conectado: " << nome << " (Depto: " << (int)depto << ")\n> ";
 
         // 2. Loop de monitoramento de vida do socket (bloqueante aguardando erro/fechamento)
         while (true) {
@@ -89,7 +89,7 @@ int main() {
 
     SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == INVALID_SOCKET) {
-        std::cerr << "Erro ao criar socket do servidor" << std::endl;
+        std::cerr << "Erro ao criar painel da central" << std::endl;
         WSACleanup();
         return 1;
     }
@@ -114,7 +114,7 @@ int main() {
     }
 
     std::cout << "=== PAINEL DO SUPERVISOR (SERVIDOR) ===" << std::endl;
-    std::cout << "Servidor escutando em 127.0.0.1:8080...\n" << std::endl;
+    std::cout << "Aguardando login de funcionarios na rede da empresa (Porta 8080)...\n" << std::endl;
 
     // Dispara a thread de Aceite
     std::thread acceptThread(ThreadAccept, serverSocket);
@@ -141,9 +141,16 @@ int main() {
 
         std::cout << "> Escolha o Departamento Alvo:\n";
         MostrarMenuDepartamentos();
-        std::cout << "Opcao: ";
         int opDepto;
-        std::cin >> opDepto;
+        while (true) {
+            std::cout << "Opcao: ";
+            if (std::cin >> opDepto && opDepto >= 1 && opDepto <= 4) {
+                break;
+            }
+            std::cout << "[ERRO] Opcao invalida. Digite um numero de 1 a 4.\n";
+            std::cin.clear();
+            std::cin.ignore(10000, '\n');
+        }
         novaTarefa.deptoAlvo = static_cast<Departamento>(opDepto);
 
         int enviados = 0;
@@ -158,7 +165,7 @@ int main() {
             }
         }
 
-        std::cout << "[SISTEMA] Tarefa " << novaTarefa.idServico << " enviada para " << enviados << " funcionario(s) do departamento " << opDepto << ".\n\n";
+        std::cout << "[CENTRAL] Tarefa " << novaTarefa.idServico << " enviada para " << enviados << " funcionario(s) do departamento " << opDepto << ".\n\n";
     }
 
     closesocket(serverSocket);

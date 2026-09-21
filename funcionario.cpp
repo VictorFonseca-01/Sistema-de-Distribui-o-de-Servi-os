@@ -25,9 +25,16 @@ int main() {
 
     std::cout << "Qual o seu departamento?\n";
     MostrarMenuDepartamentos();
-    std::cout << "Opcao: ";
     int opDepto;
-    std::cin >> opDepto;
+    while (true) {
+        std::cout << "Opcao: ";
+        if (std::cin >> opDepto && opDepto >= 1 && opDepto <= 4) {
+            break;
+        }
+        std::cout << "[ERRO] Opcao invalida. Digite um numero de 1 a 4.\n";
+        std::cin.clear();
+        std::cin.ignore(10000, '\n');
+    }
 
     SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket == INVALID_SOCKET) {
@@ -42,14 +49,14 @@ int main() {
     inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
     if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "Falha ao conectar no servidor (127.0.0.1:8080). Certifique-se de que o servidor esta rodando." << std::endl;
+        std::cerr << "Falha ao conectar na Central. Verifique se o supervisor iniciou o painel." << std::endl;
         closesocket(clientSocket);
         WSACleanup();
         system("pause");
         return 1;
     }
 
-    std::cout << "[SISTEMA] Conectado ao servidor!\n";
+    std::cout << "[SISTEMA] Conectado a Central da Empresa!\n";
 
     // Enviar mensagem de REGISTRO logo apos a conexao
     MensagemRede msgRegistro;
@@ -66,7 +73,7 @@ int main() {
         return 1;
     }
 
-    std::cout << "[SISTEMA] Aguardando novas tarefas do supervisor...\n\n";
+    std::cout << "[SISTEMA] Aguardando atribuicao de tarefas da Central...\n\n";
 
     // Loop bloqueante para aguardar tarefas (recv)
     while (true) {
@@ -83,10 +90,10 @@ int main() {
                 std::cout << "========================================\n" << std::endl;
             }
         } else if (bytesReceived == 0) {
-            std::cout << "\n[SISTEMA] Conexao encerrada pelo servidor." << std::endl;
+            std::cout << "\n[SISTEMA] A Central encerrou o expediente (Desconectado)." << std::endl;
             break;
         } else {
-            std::cout << "\n[SISTEMA] Erro de conexao com o servidor (SOCKET_ERROR)." << std::endl;
+            std::cout << "\n[SISTEMA] Perda de comunicacao com a Central." << std::endl;
             break;
         }
     }
