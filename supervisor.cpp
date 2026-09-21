@@ -3,6 +3,7 @@
 #include <thread>
 #include <vector>
 #include <mutex>
+#include <fstream>
 #include "Protocolo.h"
 
 using namespace std;
@@ -36,9 +37,6 @@ int main() {
 
     listen(s, SOMAXCONN);
 
-    cout << "=== PAINEL DA CENTRAL ===\n";
-    cout << "Aguardando funcionarios...\n\n";
-
     // thread para aceitar os funcionarios
     thread acceptThread([&]() {
         while (true) {
@@ -55,10 +53,14 @@ int main() {
                         }
                         cout << "\n[CENTRAL] " << msg.nomeFuncionario << " logou (Depto " << (int)msg.deptoAlvo << ").\n> ";
                         
-                        // loop aguardando cair a conexao
+                        // loop aguardando confirmacoes ou queda de conexao
                         while (true) {
                             int r = recv(c, (char*)&msg, sizeof(msg), 0);
-                            if (r <= 0) {
+                            if (r > 0) {
+                                if (msg.tipoMensagem == TipoMensagem::CONCLUSAO) {
+                                    cout << "\n[CENTRAL] " << msg.nomeFuncionario << " concluiu a tarefa ID " << msg.idServico << "!\n> ";
+                                }
+                            } else {
                                 cout << "\n[CENTRAL] " << msg.nomeFuncionario << " desconectou.\n> ";
                                 lock_guard<mutex> lock(clientesMutex);
                                 for (int i = 0; i < clientes.size(); i++) {
@@ -82,6 +84,10 @@ int main() {
 
     // menu do supervisor
     while (true) {
+        system("cls"); // limpa a tela a cada loop pra ficar limpo!
+        cout << "=== PAINEL DA CENTRAL ===\n";
+        cout << "Aguardando inserir tarefas...\n\n";
+
         MensagemRede tarefa;
         tarefa.tipoMensagem = TipoMensagem::NOVA_TAREFA;
         memset(tarefa.nomeFuncionario, 0, 50);
@@ -97,7 +103,7 @@ int main() {
 
         int depto = 0;
         while (depto < 1 || depto > 4) {
-            cout << "\n1-N1 | 2-N2 | 3-Distribuicao | 4-Triagem\n";
+            cout << "\n1-TI | 2-DP | 3-Almoxarifado | 4-Vendas\n";
             cout << "> Pra qual departamento enviar? ";
             cin >> depto;
             if (cin.fail()) {
@@ -116,7 +122,17 @@ int main() {
             }
         }
 
-        cout << "[CENTRAL] Enviado pra " << cont << " pessoa(s).\n\n";
+        // Salva no arquivo historico.txt
+        ofstream log("historico.txt", ios::app);
+        if (log.is_open()) {
+            log << "Tarefa " << tarefa.idServico << " enviada para o depto " << depto << ". Descricao: " << tarefa.descricaoTarefa << "\n";
+            log.close();
+        }
+
+        cout << "\n[CENTRAL] Enviado pra " << cont << " pessoa(s).\n";
+        cout << "Aperte ENTER para despachar outra tarefa...";
+        string lixo;
+        getline(cin, lixo);
     }
 
     return 0;

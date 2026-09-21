@@ -7,15 +7,16 @@
 #pragma comment(lib, "ws2_32.lib")
 
 enum class Departamento {
-    N1 = 1,
-    N2 = 2,
-    DISTRIBUICAO = 3,
-    TRIAGEM = 4
+    TI = 1,
+    DP = 2,
+    ALMOXARIFADO = 3,
+    VENDAS = 4
 };
 
 enum class TipoMensagem {
     REGISTRO = 1,
-    NOVA_TAREFA = 2
+    NOVA_TAREFA = 2,
+    CONCLUSAO = 3
 };
 
 // Struct (Plain Old Data - POD) com buffers de tamanho fixo para envio seguro
