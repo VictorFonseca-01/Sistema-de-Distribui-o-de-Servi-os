@@ -3,102 +3,70 @@
 #include <WS2tcpip.h>
 #include "Protocolo.h"
 
-void MostrarMenuDepartamentos() {
-    std::cout << "1 - N1\n";
-    std::cout << "2 - N2\n";
-    std::cout << "3 - DISTRIBUICAO\n";
-    std::cout << "4 - TRIAGEM\n";
-}
+using namespace std;
 
 int main() {
-    // Inicialização Winsock
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        std::cerr << "Falha no WSAStartup" << std::endl;
-        return 1;
-    }
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2, 2), &wsa);
 
-    std::cout << "=== TERMINAL DO FUNCIONARIO ===\n";
-    std::string nome;
-    std::cout << "Qual o seu nome? ";
-    std::getline(std::cin, nome);
+    cout << "--- TERMINAL DO FUNCIONARIO ---\n";
+    string nome;
+    cout << "Qual seu nome? ";
+    getline(cin, nome);
 
-    std::cout << "Qual o seu departamento?\n";
-    MostrarMenuDepartamentos();
-    int opDepto;
-    while (true) {
-        std::cout << "Opcao: ";
-        if (std::cin >> opDepto && opDepto >= 1 && opDepto <= 4) {
-            break;
+    int depto = 0;
+    while (depto < 1 || depto > 4) {
+        cout << "\n1-N1 | 2-N2 | 3-Distribuicao | 4-Triagem\n";
+        cout << "Escolha o setor (1 a 4): ";
+        cin >> depto;
+        if (cin.fail()) {
+            cin.clear();
+            cin.ignore(1000, '\n');
         }
-        std::cout << "[ERRO] Opcao invalida. Digite um numero de 1 a 4.\n";
-        std::cin.clear();
-        std::cin.ignore(10000, '\n');
     }
 
-    SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (clientSocket == INVALID_SOCKET) {
-        std::cerr << "Erro ao criar socket." << std::endl;
-        WSACleanup();
-        return 1;
-    }
+    SOCKET s = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(8080);
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
-    sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(8080);
-    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
-
-    if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "Falha ao conectar na Central. Verifique se o supervisor iniciou o painel." << std::endl;
-        closesocket(clientSocket);
-        WSACleanup();
+    if (connect(s, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        cout << "Falha ao conectar. A central ta aberta?\n";
         system("pause");
         return 1;
     }
 
-    std::cout << "[SISTEMA] Conectado a Central da Empresa!\n";
+    cout << "Conectado na Central!\n";
 
-    // Enviar mensagem de REGISTRO logo apos a conexao
-    MensagemRede msgRegistro;
-    msgRegistro.tipoMensagem = TipoMensagem::REGISTRO;
-    msgRegistro.idServico = 0; // irrelevante para registro
-    msgRegistro.deptoAlvo = static_cast<Departamento>(opDepto);
-    memset(msgRegistro.descricaoTarefa, 0, sizeof(msgRegistro.descricaoTarefa));
-    strncpy_s(msgRegistro.nomeFuncionario, sizeof(msgRegistro.nomeFuncionario), nome.c_str(), _TRUNCATE);
+    // manda pra central quem acabou de logar
+    MensagemRede msg;
+    msg.tipoMensagem = TipoMensagem::REGISTRO;
+    msg.deptoAlvo = (Departamento)depto;
+    strncpy_s(msg.nomeFuncionario, 50, nome.c_str(), _TRUNCATE);
 
-    if (send(clientSocket, (char*)&msgRegistro, sizeof(msgRegistro), 0) == SOCKET_ERROR) {
-        std::cerr << "Erro ao enviar registro." << std::endl;
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
-    }
+    send(s, (char*)&msg, sizeof(msg), 0);
 
-    std::cout << "[SISTEMA] Aguardando atribuicao de tarefas da Central...\n\n";
+    cout << "Aguardando tarefas...\n\n";
 
-    // Loop bloqueante para aguardar tarefas (recv)
     while (true) {
-        MensagemRede msgRecebida;
-        int bytesReceived = recv(clientSocket, (char*)&msgRecebida, sizeof(msgRecebida), 0);
+        MensagemRede recebida;
+        int bytes = recv(s, (char*)&recebida, sizeof(recebida), 0);
 
-        if (bytesReceived > 0) {
-            if (msgRecebida.tipoMensagem == TipoMensagem::NOVA_TAREFA) {
-                // Imprime a tarefa recebida no terminal de forma clara
-                std::cout << "========================================" << std::endl;
-                std::cout << " [!] NOVA TAREFA RECEBIDA [!]" << std::endl;
-                std::cout << " ID do Servico: " << msgRecebida.idServico << std::endl;
-                std::cout << " Descricao    : " << msgRecebida.descricaoTarefa << std::endl;
-                std::cout << "========================================\n" << std::endl;
+        if (bytes > 0) {
+            if (recebida.tipoMensagem == TipoMensagem::NOVA_TAREFA) {
+                cout << "\n*** TAREFA RECEBIDA ***\n";
+                cout << "ID: " << recebida.idServico << "\n";
+                cout << "Fazer: " << recebida.descricaoTarefa << "\n";
+                cout << "***********************\n";
             }
-        } else if (bytesReceived == 0) {
-            std::cout << "\n[SISTEMA] A Central encerrou o expediente (Desconectado)." << std::endl;
-            break;
         } else {
-            std::cout << "\n[SISTEMA] Perda de comunicacao com a Central." << std::endl;
+            cout << "\nA central caiu ou fechou o expediente.\n";
             break;
         }
     }
 
-    closesocket(clientSocket);
+    closesocket(s);
     WSACleanup();
     system("pause");
     return 0;
