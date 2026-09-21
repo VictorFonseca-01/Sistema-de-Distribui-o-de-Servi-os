@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <fstream>
+#include <algorithm>
 #include "Protocolo.h"
 
 using namespace std;
@@ -15,7 +16,9 @@ struct ClienteConectado {
 };
 
 vector<ClienteConectado> clientes;
-mutex clientesMutex;
+vector<MensagemRede> tarefasPendentes;
+vector<int> idsUsados;
+mutex estadoMutex;
 
 int main() {
     WSADATA wsa;
@@ -48,10 +51,27 @@ int main() {
                     int res = recv(c, (char*)&msg, sizeof(msg), 0);
                     if (res > 0 && msg.tipoMensagem == TipoMensagem::REGISTRO) {
                         {
-                            lock_guard<mutex> lock(clientesMutex);
+                            lock_guard<mutex> lock(estadoMutex);
                             clientes.push_back({c, msg.deptoAlvo, msg.nomeFuncionario});
+                            
+                            // DISPARA TAREFAS ATRASADAS DA FILA
+                            int enviadas = 0;
+                            for (auto it = tarefasPendentes.begin(); it != tarefasPendentes.end(); ) {
+                                if (it->deptoAlvo == msg.deptoAlvo) {
+                                    send(c, (char*)&(*it), sizeof(MensagemRede), 0);
+                                    it = tarefasPendentes.erase(it);
+                                    enviadas++;
+                                } else {
+                                    ++it;
+                                }
+                            }
+
+                            cout << "\n[CENTRAL] " << msg.nomeFuncionario << " logou (Depto " << (int)msg.deptoAlvo << ").";
+                            if (enviadas > 0) {
+                                cout << " " << enviadas << " tarefa(s) atrasada(s) da fila enviada(s)!";
+                            }
+                            cout << "\n> ";
                         }
-                        cout << "\n[CENTRAL] " << msg.nomeFuncionario << " logou (Depto " << (int)msg.deptoAlvo << ").\n> ";
                         
                         // loop aguardando confirmacoes ou queda de conexao
                         while (true) {
@@ -62,7 +82,7 @@ int main() {
                                 }
                             } else {
                                 cout << "\n[CENTRAL] " << msg.nomeFuncionario << " desconectou.\n> ";
-                                lock_guard<mutex> lock(clientesMutex);
+                                lock_guard<mutex> lock(estadoMutex);
                                 for (int i = 0; i < clientes.size(); i++) {
                                     if (clientes[i].socket == c) {
                                         clientes.erase(clientes.begin() + i);
@@ -92,8 +112,25 @@ int main() {
         tarefa.tipoMensagem = TipoMensagem::NOVA_TAREFA;
         memset(tarefa.nomeFuncionario, 0, 50);
 
-        cout << "> ID da tarefa: ";
-        cin >> tarefa.idServico;
+        int idValido = 0;
+        while (!idValido) {
+            cout << "> ID da tarefa: ";
+            cin >> tarefa.idServico;
+            if (cin.fail()) {
+                cin.clear();
+                cin.ignore(1000, '\n');
+                continue;
+            }
+            
+            // VERIFICADOR DE ID DUPLICADO
+            lock_guard<mutex> lock(estadoMutex);
+            if (find(idsUsados.begin(), idsUsados.end(), tarefa.idServico) != idsUsados.end()) {
+                cout << "[ERRO] Esse ID ja existe! Tente outro numero.\n";
+            } else {
+                idsUsados.push_back(tarefa.idServico);
+                idValido = 1;
+            }
+        }
         cin.ignore();
 
         cout << "> O que tem que fazer: ";
@@ -111,14 +148,22 @@ int main() {
                 cin.ignore(1000, '\n');
             }
         }
+        cin.ignore(); // Limpa o buffer do Enter para o pause abaixo
         tarefa.deptoAlvo = (Departamento)depto;
 
         int cont = 0;
-        lock_guard<mutex> lock(clientesMutex);
-        for (auto& cliente : clientes) {
-            if (cliente.depto == tarefa.deptoAlvo) {
-                send(cliente.socket, (char*)&tarefa, sizeof(tarefa), 0);
-                cont++;
+        {
+            lock_guard<mutex> lock(estadoMutex);
+            for (auto& cliente : clientes) {
+                if (cliente.depto == tarefa.deptoAlvo) {
+                    send(cliente.socket, (char*)&tarefa, sizeof(tarefa), 0);
+                    cont++;
+                }
+            }
+            
+            // TAREFA NA FILA
+            if (cont == 0) {
+                tarefasPendentes.push_back(tarefa);
             }
         }
 
@@ -129,7 +174,12 @@ int main() {
             log.close();
         }
 
-        cout << "\n[CENTRAL] Enviado pra " << cont << " pessoa(s).\n";
+        if (cont == 0) {
+            cout << "\n[CENTRAL] Ninguem de " << depto << " online. Tarefa guardada na FILA DE ESPERA!\n";
+        } else {
+            cout << "\n[CENTRAL] Enviado pra " << cont << " pessoa(s).\n";
+        }
+        
         cout << "Aperte ENTER para despachar outra tarefa...";
         string lixo;
         getline(cin, lixo);
