@@ -26,11 +26,22 @@ int main() {
     }
     cin.ignore(); // limpa o enter pro proximo getline
 
+    cout << "Digite o IP da Central (Enter para 127.0.0.1): ";
+    string ipCentral;
+    getline(cin, ipCentral);
+    if (ipCentral.empty()) {
+        ipCentral = "127.0.0.1";
+    }
+
     SOCKET s = socket(AF_INET, SOCK_STREAM, 0);
     sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(8080);
-    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    if (inet_pton(AF_INET, ipCentral.c_str(), &addr.sin_addr) <= 0) {
+        cout << "Formato de IP invalido!\n";
+        system("pause");
+        return 1;
+    }
 
     if (connect(s, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
         cout << "Falha ao conectar. A central ta aberta?\n";

@@ -31,7 +31,7 @@ int main() {
     sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(8080);
-    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(s, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
         cout << "Erro bind. A porta ja ta em uso.\n";
