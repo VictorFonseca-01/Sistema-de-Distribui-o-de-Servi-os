@@ -6,19 +6,35 @@
 using namespace std;
 
 int main() {
-    WSADATA wsa;
-    WSAStartup(MAKEWORD(2, 2), &wsa);
+    // Garante suporte a acentuacao UTF-8 no CMD do Windows
+    SetConsoleOutputCP(65001);
 
-    cout << "--- TERMINAL DO FUNCIONARIO ---\n";
-    system("color 0B")
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        cout << "[ERRO] Falha ao inicializar o Winsock.\n";
+        return 1;
+    }
+
+    system("color 0F");
+    cout << "=========================================\n";
+    cout << "       TERMINAL DO FUNCIONARIO           \n";
+    cout << "=========================================\n\n";
+
     string nome;
     cout << "Qual seu nome? ";
     getline(cin, nome);
+    while (nome.empty()) {
+        cout << "O nome nao pode ser vazio. Digite seu nome: ";
+        getline(cin, nome);
+    }
 
     int depto = 0;
     while (depto < 1 || depto > 4) {
-        cout << "\n1-TI | 2-DP | 3-Almoxarifado | 4-Vendas\n";
-        system("color 1")
+        cout << "\nSelecione o seu setor:\n";
+        cout << " 1 - "; imprimirDepartamentoColorido(Departamento::TI); cout << "\n";
+        cout << " 2 - "; imprimirDepartamentoColorido(Departamento::DP); cout << "\n";
+        cout << " 3 - "; imprimirDepartamentoColorido(Departamento::ALMOX); cout << "\n";
+        cout << " 4 - "; imprimirDepartamentoColorido(Departamento::VENDAS); cout << "\n";
         cout << "Escolha o setor (1 a 4): ";
         cin >> depto;
         if (cin.fail()) {
@@ -26,9 +42,9 @@ int main() {
             cin.ignore(1000, '\n');
         }
     }
-    cin.ignore(); // limpa o enter pro proximo getline
+    cin.ignore(); // limpa buffer do enter
 
-    cout << "Digite o IP da Central (Enter para 127.0.0.1): ";
+    cout << "\nDigite o IP da Central (pressione ENTER para 127.0.0.1): ";
     string ipCentral;
     getline(cin, ipCentral);
     if (ipCentral.empty()) {
@@ -36,64 +52,79 @@ int main() {
     }
 
     SOCKET s = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in addr;
+    if (s == INVALID_SOCKET) {
+        cout << "[ERRO] Nao foi possivel criar o Socket.\n";
+        WSACleanup();
+        system("pause");
+        return 1;
+    }
+
+    sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(8080);
     if (inet_pton(AF_INET, ipCentral.c_str(), &addr.sin_addr) <= 0) {
-        cout << "Formato de IP invalido!\n";
+        cout << "[ERRO] Formato de IP invalido!\n";
+        closesocket(s);
+        WSACleanup();
         system("pause");
         return 1;
     }
 
+    cout << "Conectando a Central (" << ipCentral << ":8080)...\n";
     if (connect(s, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
-        cout << "Falha ao conectar. A central ta aberta?\n";
+        cout << "[ERRO] Falha ao conectar. Certifique-se de que a Central (supervisor.exe) esta rodando.\n";
+        closesocket(s);
+        WSACleanup();
         system("pause");
         return 1;
     }
 
-    system("cls"); // Limpa a tela pra iniciar o trabalho
-    cout << "Conectado na Central!\n";
+    system("cls");
+    cout << "=========================================\n";
+    cout << "           CONECTADO NA CENTRAL!         \n";
+    cout << " Funcionario: " << nome << "\n Setor: ";
+    imprimirDepartamentoColorido((Departamento)depto);
+    cout << "\n=========================================\n\n";
 
-    // manda pra central quem acabou de logar
-    MensagemRede msg;
+    // Envia mensagem de registro do funcionário
+    MensagemRede msg{};
     msg.tipoMensagem = TipoMensagem::REGISTRO;
     msg.deptoAlvo = (Departamento)depto;
-    strncpy_s(msg.nomeFuncionario, 50, nome.c_str(), _TRUNCATE);
+    copiarTextoSeguro(msg.nomeFuncionario, sizeof(msg.nomeFuncionario), nome.c_str());
 
     send(s, (char*)&msg, sizeof(msg), 0);
 
-    cout << "Aguardando tarefas...\n\n";
+    cout << "Aguardando tarefas atribuídas ao seu setor...\n\n";
 
     while (true) {
-        MensagemRede recebida;
+        MensagemRede recebida{};
         int bytes = recv(s, (char*)&recebida, sizeof(recebida), 0);
 
         if (bytes > 0) {
             if (recebida.tipoMensagem == TipoMensagem::NOVA_TAREFA) {
-                cout << "\n===============================\n";
-                cout << "     *** TAREFA RECEBIDA ***\n";
-                cout << " ID: " << recebida.idServico << "\n";
-                cout << " Fazer: " << recebida.descricaoTarefa << "\n";
-                cout << "===============================\n\n";
+                cout << "\n=========================================\n";
+                cout << "         *** TAREFA RECEBIDA ***         \n";
+                cout << " ID da Tarefa: " << recebida.idServico << "\n";
+                cout << " Descricao   : " << recebida.descricaoTarefa << "\n";
+                cout << "=========================================\n\n";
                 
-                // Trava o sistema do funcionario ate ele confirmar que fez
-                cout << "Aperte ENTER quando terminar o servico...";
+                cout << "Pressione ENTER quando concluir este servico...";
                 string lixo;
                 getline(cin, lixo);
 
-                // Envia a mensagem de volta confirmando a conclusao
-                MensagemRede conf;
+                // Envia confirmação de conclusão
+                MensagemRede conf{};
                 conf.tipoMensagem = TipoMensagem::CONCLUSAO;
                 conf.idServico = recebida.idServico;
-                strncpy_s(conf.nomeFuncionario, 50, nome.c_str(), _TRUNCATE);
+                copiarTextoSeguro(conf.nomeFuncionario, sizeof(conf.nomeFuncionario), nome.c_str());
                 send(s, (char*)&conf, sizeof(conf), 0);
 
                 system("cls");
-                cout << "Servico " << recebida.idServico << " concluido! Avisamos a central.\n";
+                cout << "Servico ID " << recebida.idServico << " concluido com sucesso! Central notificada.\n";
                 cout << "Aguardando novas tarefas...\n\n";
             }
         } else {
-            cout << "\nA central caiu ou fechou o expediente.\n";
+            cout << "\nConexao finalizada com a Central.\n";
             break;
         }
     }

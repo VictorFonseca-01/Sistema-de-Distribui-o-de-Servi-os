@@ -4,6 +4,7 @@
 #include <ws2tcpip.h>
 #include <string>
 #include <iostream>
+#include <cstring>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -20,7 +21,7 @@ enum class TipoMensagem {
     CONCLUSAO = 3
 };
 
-// Struct (Plain Old Data - POD) com buffers de tamanho fixo para envio seguro
+// Struct (Plain Old Data - POD) com buffers de tamanho fixo para envio seguro via TCP
 struct MensagemRede {
     TipoMensagem tipoMensagem;
     int idServico;
@@ -29,29 +30,39 @@ struct MensagemRede {
     char descricaoTarefa[256];
 };
 
-// Função auxiliar para exibir o nome do departamento com a cor correspondente no Console do Windows
+// Copia strings garantindo terminador nulo ('\0'), compatível com MSVC e GCC/MinGW
+inline void copiarTextoSeguro(char* destino, size_t tamanhoDestino, const char* origem) {
+    if (!destino || tamanhoDestino == 0) return;
+    std::strncpy(destino, origem ? origem : "", tamanhoDestino - 1);
+    destino[tamanhoDestino - 1] = '\0';
+}
+
+// Exibe o nome do departamento com destaque de cor no terminal Windows (CMD)
 inline void imprimirDepartamentoColorido(Departamento depto) {
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
     switch (depto) {
         case Departamento::TI:
-            SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_INTENSITY); // Azul
+            SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_INTENSITY); // Azul brilhante
             std::cout << "TI";
             break;
         case Departamento::DP:
-            SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY); // Rosa / Magenta
+            SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY); // Magenta
             std::cout << "DP";
             break;
         case Departamento::ALMOX:
             SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY); // Amarelo
-            std::cout << "ALMOX";
+            std::cout << "ALMOXARIFADO";
             break;
         case Departamento::VENDAS:
             SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN | FOREGROUND_INTENSITY); // Verde
             std::cout << "VENDAS";
             break;
+        default:
+            std::cout << "DESCONHECIDO";
+            break;
     }
     
-    // Reseta para a cor padrão do console (cinza claro/branco)
+    // Restaura a cor padrão do console (Branco/Cinza claro)
     SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 }
