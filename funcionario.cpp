@@ -10,6 +10,7 @@ int main() {
     WSAStartup(MAKEWORD(2, 2), &wsa);
 
     cout << "--- TERMINAL DO FUNCIONARIO ---\n";
+    system("color 0B")
     string nome;
     cout << "Qual seu nome? ";
     getline(cin, nome);
@@ -17,6 +18,7 @@ int main() {
     int depto = 0;
     while (depto < 1 || depto > 4) {
         cout << "\n1-TI | 2-DP | 3-Almoxarifado | 4-Vendas\n";
+        system("color 1")
         cout << "Escolha o setor (1 a 4): ";
         cin >> depto;
         if (cin.fail()) {
